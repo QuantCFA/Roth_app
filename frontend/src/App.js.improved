@@ -1,0 +1,884 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Container,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
+  ThemeProvider,
+  createTheme,
+  Box,
+  InputAdornment,
+  IconButton,
+  Snackbar,
+  Grid,
+  Alert,
+  CircularProgress,
+  TablePagination,
+  Collapse,
+} from '@mui/material';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import ErrorBoundary from './ErrorBoundary';
+import { useAuth, useUserData, useInputData, useConversions, useFormState } from './useAppData';
+import './App.css';
+
+const theme = createTheme();
+
+function App() {
+  // Custom hooks replace most of your useState and useEffect logic
+  const { userId, isLoggedIn, login, logout, createUser } = useAuth();
+  const { userInfo, loading: userLoading, error: userError, refetch: refetchUser } = useUserData(userId);
+  const { inputInfo, runId, loading: inputLoading, error: inputError, updateInputs } = useInputData(userId);
+  const { conversions, parts, retireYearData, loading: conversionsLoading, error: conversionsError, runCalculations } = useConversions(runId);
+
+  // UI state
+  const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [inputDialogOpen, setInputDialogOpen] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [showIncomeProjections, setShowIncomeProjections] = useState(false);
+  const [incomePage, setIncomePage] = useState(0);
+  const rowsPerPage = 10;
+
+  // Form state using custom hook
+  const {
+    formData: loginForm,
+    updateField: updateLoginField,
+    validateForm: validateLoginForm,
+    resetForm: resetLoginForm
+  } = useFormState(
+    { username: '', password: '', showPassword: false },
+    {
+      username: { required: true },
+      password: { required: true }
+    }
+  );
+
+  const {
+    formData: userForm,
+    updateField: updateUserField,
+    validateForm: validateUserForm,
+    resetForm: resetUserForm
+  } = useFormState(
+    {
+      username: '',
+      password: '',
+      email: '',
+      birth_date: '',
+      marital_status: 'S',
+      birth_date_spouse: '',
+      trad_savings: '',
+      roth_savings: '',
+    },
+    {
+      username: { required: true },
+      password: { required: true },
+      email: { required: true, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email format' },
+      birth_date: { required: true, pattern: /^\d{4}-\d{2}-\d{2}$/, message: 'Use YYYY-MM-DD format' },
+      trad_savings: { required: true, min: 0 },
+      roth_savings: { required: true, min: 0 }
+    }
+  );
+
+  const {
+    formData: inputForm,
+    updateField: updateInputField,
+    validateForm: validateInputForm,
+    setFormData: setInputFormData
+  } = useFormState({
+    soc_sec_benefit: '',
+    salary: '',
+    cont_return_assum: '0.08',
+    dist_return_assum: '0.05',
+    inflation_assum: '0.015',
+    soc_sec_grw_assum: '0.015',
+    retire_tax_hl: 1,
+    contribution_status: 'S',
+    distribution_status: 'S',
+    life_years: '30',
+    trad_savings: '',
+    roth_savings: '',
+  });
+
+  // Update input form when data loads
+  useEffect(() => {
+    if (inputInfo && userInfo) {
+      setInputFormData({
+        soc_sec_benefit: inputInfo.soc_sec_benefit?.toString() || '',
+        salary: inputInfo.salary?.toString() || '',
+        cont_return_assum: inputInfo.cont_return_assum?.toString() || '0.08',
+        dist_return_assum: inputInfo.dist_return_assum?.toString() || '0.05',
+        inflation_assum: inputInfo.inflation_assum?.toString() || '0.015',
+        soc_sec_grw_assum: inputInfo.soc_sec_grw_assum?.toString() || '0.015',
+        retire_tax_hl: inputInfo.retire_tax_hl || 1,
+        contribution_status: inputInfo.contribution_status || 'S',
+        distribution_status: inputInfo.distribution_status || 'S',
+        life_years: inputInfo.life_years?.toString() || '30',
+        trad_savings: userInfo.trad_savings?.toString() || '',
+        roth_savings: userInfo.roth_savings?.toString() || '',
+      });
+    }
+  }, [inputInfo, userInfo, setInputFormData]);
+
+  // Determine if loading
+  const isLoading = userLoading || inputLoading || conversionsLoading;
+  const hasError = userError || inputError || conversionsError;
+
+  // Handle form changes
+  const handleLoginFormChange = (e) => {
+    const { name, value } = e.target;
+    updateLoginField(name, value);
+  };
+
+  const handleTogglePassword = () => {
+    updateLoginField('showPassword', !loginForm.showPassword);
+  };
+
+  const handleUserFormChange = (e) => {
+    const { name, value } = e.target;
+    updateUserField(name, value);
+  };
+
+  const handleInputFormChange = (e) => {
+    const { name, value } = e.target;
+    updateInputField(name, value);
+  };
+
+  // Handle success messages
+  const handleSuccess = (message) => {
+    setSuccessMessage(message);
+  };
+
+  // Handle login
+  const handleLoginSubmit = async () => {
+    if (!validateLoginForm()) return;
+    
+    try {
+      await login(loginForm);
+      resetLoginForm();
+      handleSuccess('Login successful');
+    } catch (err) {
+      console.error('Login error:', err.message);
+    }
+  };
+
+  // Handle user creation
+  const handleUserSubmit = async () => {
+    if (!validateUserForm()) return;
+    
+    try {
+      await createUser(userForm);
+      setUserDialogOpen(false);
+      resetUserForm();
+      handleSuccess('Account created successfully');
+    } catch (err) {
+      console.error('User creation error:', err.message);
+    }
+  };
+
+  // Handle input submission
+  const handleInputSubmit = () => {
+    if (!validateInputForm()) return;
+    setConfirmDialogOpen(true);
+  };
+
+  // Handle confirmed input submission
+  const handleConfirmSubmit = async () => {
+    setConfirmDialogOpen(false);
+    try {
+      await updateInputs(inputForm);
+      setInputDialogOpen(false);
+      handleSuccess('Inputs updated successfully');
+      
+      // Run calculations
+      await runCalculations(userId);
+      handleSuccess('Calculations completed successfully');
+      
+      // Refresh user data
+      refetchUser();
+    } catch (err) {
+      console.error('Input update error:', err.message);
+    }
+  };
+
+  // Handle manual calculations
+  const handleCalculateConversions = async () => {
+    try {
+      await runCalculations(userId);
+      handleSuccess('Calculations completed successfully');
+    } catch (err) {
+      console.error('Calculation error:', err.message);
+    }
+  };
+
+  // Handle income projections toggle
+  const handleToggleIncomeProjections = () => {
+    setShowIncomeProjections(!showIncomeProjections);
+    if (!showIncomeProjections) {
+      setIncomePage(0); // Reset to first page when opening
+    }
+  };
+
+  // Handle income table pagination
+  const handleIncomePageChange = (event, newPage) => {
+    setIncomePage(newPage);
+  };
+
+  // Helper function to check if a conversion group should be highlighted
+  const shouldHighlightGroup = (convGroupNum) => {
+    const correspondingPart = parts.find(part => part.conv_group_num === convGroupNum);
+    return correspondingPart && correspondingPart.tax_rate_arb_amt < 0;
+  };
+
+  // Handle snackbar close
+  const handleSnackbarClose = () => {
+    setSuccessMessage(null);
+  };
+
+  // Show login screen if not authenticated
+  if (!isLoggedIn) {
+    return (
+      <ThemeProvider theme={theme}>
+        <ErrorBoundary>
+          <Container maxWidth="sm" style={{ marginTop: '20px' }}>
+            <Typography variant="h4" gutterBottom>
+              Login
+            </Typography>
+            <Box component="form" noValidate>
+              <TextField
+                label="Username"
+                name="username"
+                value={loginForm.username}
+                onChange={handleLoginFormChange}
+                fullWidth
+                margin="normal"
+                required
+              />
+              <TextField
+                label="Password"
+                name="password"
+                type={loginForm.showPassword ? 'text' : 'password'}
+                value={loginForm.password}
+                onChange={handleLoginFormChange}
+                fullWidth
+                margin="normal"
+                required
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={handleTogglePassword}>
+                        {loginForm.showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleLoginSubmit}
+                style={{ margin: '10px' }}
+                disabled={isLoading}
+              >
+                Login
+              </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => setUserDialogOpen(true)}
+                style={{ margin: '10px' }}
+              >
+                Create Account
+              </Button>
+            </Box>
+
+            {/* Create Account Dialog */}
+            <Dialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)}>
+              <DialogTitle>Create Account</DialogTitle>
+              <DialogContent>
+                <TextField
+                  label="Username"
+                  name="username"
+                  value={userForm.username}
+                  onChange={handleUserFormChange}
+                  fullWidth
+                  margin="normal"
+                  required
+                />
+                <TextField
+                  label="Password"
+                  name="password"
+                  type="password"
+                  value={userForm.password}
+                  onChange={handleUserFormChange}
+                  fullWidth
+                  margin="normal"
+                  required
+                />
+                <TextField
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={userForm.email}
+                  onChange={handleUserFormChange}
+                  fullWidth
+                  margin="normal"
+                  required
+                />
+                <TextField
+                  label="Birth Date (YYYY-MM-DD)"
+                  name="birth_date"
+                  value={userForm.birth_date}
+                  onChange={handleUserFormChange}
+                  fullWidth
+                  margin="normal"
+                  required
+                />
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Marital Status</InputLabel>
+                  <Select
+                    name="marital_status"
+                    value={userForm.marital_status}
+                    onChange={handleUserFormChange}
+                  >
+                    <MenuItem value="S">Single</MenuItem>
+                    <MenuItem value="M">Married Filing Jointly</MenuItem>
+                    <MenuItem value="H">Head of Household</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  label="Spouse Birth Date (YYYY-MM-DD)"
+                  name="birth_date_spouse"
+                  value={userForm.birth_date_spouse}
+                  onChange={handleUserFormChange}
+                  fullWidth
+                  margin="normal"
+                  disabled={userForm.marital_status !== 'M'}
+                />
+                <TextField
+                  label="Traditional Savings"
+                  name="trad_savings"
+                  type="number"
+                  value={userForm.trad_savings}
+                  onChange={handleUserFormChange}
+                  fullWidth
+                  margin="normal"
+                  required
+                />
+                <TextField
+                  label="Roth Savings"
+                  name="roth_savings"
+                  type="number"
+                  value={userForm.roth_savings}
+                  onChange={handleUserFormChange}
+                  fullWidth
+                  margin="normal"
+                  required
+                />
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setUserDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleUserSubmit} color="primary" disabled={isLoading}>
+                  Create
+                </Button>
+              </DialogActions>
+            </Dialog>
+
+            <Snackbar
+              open={!!successMessage}
+              autoHideDuration={3000}
+              onClose={handleSnackbarClose}
+            >
+              <Alert severity="success" onClose={handleSnackbarClose}>
+                {successMessage}
+              </Alert>
+            </Snackbar>
+            
+            {hasError && (
+              <Alert severity="error" style={{ marginTop: '20px' }}>
+                {userError || inputError || conversionsError}
+              </Alert>
+            )}
+          </Container>
+        </ErrorBoundary>
+      </ThemeProvider>
+    );
+  }
+
+  // Main app screen
+  if (isLoading) {
+    return (
+      <Container style={{ textAlign: 'center', marginTop: '20px' }}>
+        <CircularProgress />
+        <Typography>Loading...</Typography>
+      </Container>
+    );
+  }
+
+  return (
+    <ThemeProvider theme={theme}>
+      <ErrorBoundary>
+        <Container maxWidth="lg" style={{ marginTop: '20px' }}>
+          <Typography variant="h4" gutterBottom>
+            Roth Conversion Analyzer
+          </Typography>
+
+          {hasError && (
+            <Alert severity="error" style={{ marginBottom: '20px' }}>
+              {userError || inputError || conversionsError}
+            </Alert>
+          )}
+
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <Box marginBottom={2}>
+                <Typography variant="h6">User Information</Typography>
+                {userInfo ? (
+                  <>
+                    <Typography>Username: {userInfo.username}</Typography>
+                    <Typography>Birth Date: {userInfo.birth_date}</Typography>
+                    <Typography>Marital Status: {userInfo.marital_status === 'S' ? 'Single' : userInfo.marital_status === 'M' ? 'Married Filing Jointly' : 'Head of Household'}</Typography>
+                    {userInfo.marital_status === 'M' && userInfo.birth_date_spouse && (
+                      <Typography>Spouse Birth Date: {userInfo.birth_date_spouse}</Typography>
+                    )}
+                    <Typography>Traditional Savings: ${userInfo.trad_savings?.toLocaleString()}</Typography>
+                    <Typography>Roth Savings: ${userInfo.roth_savings?.toLocaleString()}</Typography>
+                  </>
+                ) : (
+                  <Typography>Loading user information...</Typography>
+                )}
+              </Box>
+            </Grid>
+            <Grid item xs={6}>
+              <Box marginBottom={2}>
+                <Typography variant="h6">User Assumptions</Typography>
+                {inputInfo ? (
+                  <>
+                    <Typography>Social Security Benefit: ${inputInfo.soc_sec_benefit?.toLocaleString()}</Typography>
+                    <Typography>Distribution Return Assumption: {inputInfo.dist_return_assum}</Typography>
+                    <Typography>Inflation Assumption: {inputInfo.inflation_assum}</Typography>
+                    <Typography>Contribution Status: {inputInfo.contribution_status === 'S' ? 'Single' : inputInfo.contribution_status === 'M' ? 'Married Filing Jointly' : 'Head of Household'}</Typography>
+                    <Typography>Distribution Status: {inputInfo.distribution_status === 'S' ? 'Single' : inputInfo.distribution_status === 'M' ? 'Married Filing Jointly' : 'Head of Household'}</Typography>
+                    <Typography>Life Years: {inputInfo.life_years}</Typography>
+                  </>
+                ) : (
+                  <Typography>No inputs set</Typography>
+                )}
+              </Box>
+            </Grid>
+          </Grid>
+
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setInputDialogOpen(true)}
+            style={{ margin: '10px' }}
+            disabled={isLoading}
+          >
+            Add/Chg Assumptions
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={handleToggleIncomeProjections}
+            style={{ margin: '10px' }}
+            disabled={isLoading || retireYearData.length === 0}
+          >
+            {showIncomeProjections ? 'Hide Income Projections' : 'View the Income Your Savings Will Generate'}
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={logout}
+            style={{ margin: '10px' }}
+          >
+            Logout
+          </Button>
+
+          {/* Income Projections Table */}
+          <Collapse in={showIncomeProjections} timeout="auto" unmountOnExit>
+            <Box style={{ marginTop: '20px', marginBottom: '20px' }}>
+              <Typography variant="h5" gutterBottom>
+                Income Projections During Retirement
+              </Typography>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Year</TableCell>
+                      <TableCell>Age</TableCell>
+                      <TableCell>SS Benefit</TableCell>
+                      <TableCell>Traditional Dist</TableCell>
+                      <TableCell>Roth Dist</TableCell>
+                      <TableCell>Fed Tax</TableCell>
+                      <TableCell>After-Tax Dist</TableCell>
+                      <TableCell>Total Cash Flow</TableCell>
+                      <TableCell>% SS Taxed</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {retireYearData.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9}>No income projection data available</TableCell>
+                      </TableRow>
+                    ) : (
+                      retireYearData
+                        .slice(incomePage * rowsPerPage, incomePage * rowsPerPage + rowsPerPage)
+                        .map((row, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{new Date(row.year).getFullYear()}</TableCell>
+                            <TableCell>{row.age}</TableCell>
+                            <TableCell>
+                              ${row.ss_benefit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </TableCell>
+                            <TableCell>
+                              ${row.trad_dist_opt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </TableCell>
+                            <TableCell>
+                              ${row.roth_dist_opt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </TableCell>
+                            <TableCell>
+                              ${row.fed_tax_opt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </TableCell>
+                            <TableCell>
+                              ${row.after_tax_dist_opt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </TableCell>
+                            <TableCell>
+                              ${row.atcf_opt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </TableCell>
+                            <TableCell>{(row.pct_ss_taxed_opt * 100).toFixed(1)}%</TableCell>
+                          </TableRow>
+                        ))
+                    )}
+                  </TableBody>
+                </Table>
+                {retireYearData.length > 0 && (
+                  <TablePagination
+                    component="div"
+                    count={retireYearData.length}
+                    page={incomePage}
+                    onPageChange={handleIncomePageChange}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                  />
+                )}
+              </TableContainer>
+            </Box>
+          </Collapse>
+
+          {/* Input Dialog */}
+          <Dialog open={inputDialogOpen} onClose={() => setInputDialogOpen(false)}>
+            <DialogTitle>Edit Retirement Data</DialogTitle>
+            <DialogContent>
+              <TextField
+                label="Traditional Savings"
+                name="trad_savings"
+                type="number"
+                value={inputForm.trad_savings}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+                required
+              />
+              <TextField
+                label="Roth Savings"
+                name="roth_savings"
+                type="number"
+                value={inputForm.roth_savings}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+                required
+              />
+              <TextField
+                label="Social Security Benefit"
+                name="soc_sec_benefit"
+                type="number"
+                value={inputForm.soc_sec_benefit}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+              />
+              <TextField
+                label="Salary"
+                name="salary"
+                type="number"
+                value={inputForm.salary}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+              />
+              <TextField
+                label="Contribution Return Assumption"
+                name="cont_return_assum"
+                type="number"
+                step="0.01"
+                value={inputForm.cont_return_assum}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+              />
+              <TextField
+                label="Distribution Return Assumption"
+                name="dist_return_assum"
+                type="number"
+                step="0.01"
+                value={inputForm.dist_return_assum}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+              />
+              <TextField
+                label="Inflation Assumption"
+                name="inflation_assum"
+                type="number"
+                step="0.01"
+                value={inputForm.inflation_assum}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+              />
+              <TextField
+                label="Social Security Growth Assumption"
+                name="soc_sec_grw_assum"
+                type="number"
+                step="0.01"
+                value={inputForm.soc_sec_grw_assum}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Retirement Tax Level</InputLabel>
+                <Select
+                  name="retire_tax_hl"
+                  value={inputForm.retire_tax_hl}
+                  onChange={handleInputFormChange}
+                >
+                  <MenuItem value={1}>Low</MenuItem>
+                  <MenuItem value={2}>High</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Contribution Status</InputLabel>
+                <Select
+                  name="contribution_status"
+                  value={inputForm.contribution_status}
+                  onChange={handleInputFormChange}
+                >
+                  <MenuItem value="S">Single</MenuItem>
+                  <MenuItem value="M">Married Filing Jointly</MenuItem>
+                  <MenuItem value="H">Head of Household</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Distribution Status</InputLabel>
+                <Select
+                  name="distribution_status"
+                  value={inputForm.distribution_status}
+                  onChange={handleInputFormChange}
+                >
+                  <MenuItem value="S">Single</MenuItem>
+                  <MenuItem value="M">Married Filing Jointly</MenuItem>
+                  <MenuItem value="H">Head of Household</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                label="Life Years"
+                name="life_years"
+                type="number"
+                value={inputForm.life_years}
+                onChange={handleInputFormChange}
+                fullWidth
+                margin="normal"
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setInputDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleInputSubmit} color="primary">
+                Submit
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Confirmation Dialog */}
+          <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+            <DialogTitle>Confirm Submission and Calculations</DialogTitle>
+            <DialogContent>
+              <Typography>
+                Proceeding with Submit will overwrite Inputs AND also create new Roth Conversion tables, Proceed?
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setConfirmDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleConfirmSubmit} color="primary">
+                Confirm
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Conversions Table */}
+          <Typography variant="h5" gutterBottom>
+            Conversions
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Group</TableCell>
+                  <TableCell>Tax Bracket</TableCell>
+                  <TableCell>Conversion Amount</TableCell>
+                  <TableCell>Conversion Tax</TableCell>
+                  <TableCell>Tax Rate Swap G/L</TableCell>
+                  <TableCell>Portfolio Gain</TableCell>
+                  <TableCell>Total After-Tax Payout</TableCell>
+                  <TableCell>Return Multiple</TableCell>
+                  <TableCell>IRR</TableCell>
+                  <TableCell>Duration</TableCell>
+                  <TableCell>Conv Tax Rate</TableCell>
+                  <TableCell>Dist MTR</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {conversions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={12}>No conversions data available</TableCell>
+                  </TableRow>
+                ) : (
+                  conversions.map((conv) => (
+                    <TableRow 
+                      key={conv.conv_group_num}
+                      style={{
+                        backgroundColor: shouldHighlightGroup(conv.conv_group_num) ? '#ffebee' : 'transparent'
+                      }}
+                    >
+                      <TableCell>{conv.conv_group_num}</TableCell>
+                      <TableCell>{(conv.tax_rate_bucket * 100).toFixed(1)}%</TableCell>
+                      <TableCell>
+                        ${conv.conv_amt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${conv.conv_tax.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${conv.tax_rate_arb_amt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${conv.synthetic_roth_cont.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${conv.total_after_tax_dist_chg_amt.toLocaleString('en-US', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })}
+                      </TableCell>
+                      <TableCell>{conv.conv_return_multiple.toFixed(2)}</TableCell>
+                      <TableCell>{(conv.conv_irr * 100).toFixed(2)}%</TableCell>
+                      <TableCell>{conv.conv_duration.toFixed(1)}</TableCell>
+                      <TableCell>{(conv.conv_tax_rate * 100).toFixed(1)}%</TableCell>
+                      <TableCell>{(conv.dist_mtr_pre_conv * 100).toFixed(1)}%</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Parts Table */}
+          <Typography variant="h5" gutterBottom style={{ marginTop: '20px' }}>
+            Hypothetical: Bracket Conversions Done Separately
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Group</TableCell>
+                  <TableCell>Tax Bracket</TableCell>
+                  <TableCell>Conversion Amount</TableCell>
+                  <TableCell>Conversion Tax</TableCell>
+                  <TableCell>Tax Rate Swap G/L</TableCell>
+                  <TableCell>Portfolio Gain</TableCell>
+                  <TableCell>Total After-Tax Payout</TableCell>
+                  <TableCell>Return Multiple</TableCell>
+                  <TableCell>IRR</TableCell>
+                  <TableCell>Duration</TableCell>
+                  <TableCell>Conv MTR</TableCell>
+                  <TableCell>Dist MTR</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {parts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={12}>No parts data available</TableCell>
+                  </TableRow>
+                ) : (
+                  parts.map((part) => (
+                    <TableRow 
+                      key={part.conv_group_num}
+                      style={{
+                        backgroundColor: part.tax_rate_arb_amt < 0 ? '#ffebee' : 'transparent'
+                      }}
+                    >
+                      <TableCell>{part.conv_group_num}</TableCell>
+                      <TableCell>{(part.tax_rate_bucket * 100).toFixed(1)}%</TableCell>
+                      <TableCell>
+                        ${part.conv_amt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${part.conv_tax.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${part.tax_rate_arb_amt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${part.synthetic_roth_cont.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </TableCell>
+                      <TableCell>
+                        ${part.total_after_tax_dist_chg_amt.toLocaleString('en-US', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })}
+                      </TableCell>
+                      <TableCell>{part.conv_return_multiple.toFixed(2)}</TableCell>
+                      <TableCell>{(part.conv_irr * 100).toFixed(2)}%</TableCell>
+                      <TableCell>{part.conv_duration.toFixed(1)}</TableCell>
+                      <TableCell>{(part.conv_tax_rate * 100).toFixed(1)}%</TableCell>
+                      <TableCell>{(part.dist_mtr_pre_conv * 100).toFixed(1)}%</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Snackbar
+            open={!!successMessage}
+            autoHideDuration={3000}
+            onClose={handleSnackbarClose}
+          >
+            <Alert severity="success" onClose={handleSnackbarClose}>
+              {successMessage}
+            </Alert>
+          </Snackbar>
+        </Container>
+      </ErrorBoundary>
+    </ThemeProvider>
+  );
+}
+
+export default App;

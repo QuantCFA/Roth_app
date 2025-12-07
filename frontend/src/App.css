@@ -1,0 +1,29 @@
+.App {
+  text-align: center;
+  margin: 20px;
+}
+
+/* Tab Panel Styling */
+.tab-panel {
+  padding: 15px 0;
+  min-height: 400px;
+}
+
+/* Reduce tab spacing */
+.MuiTab-root {
+  min-width: auto !important;
+  padding: 12px 4px !important;
+}
+
+table {
+  margin: 0 auto;
+  border-collapse: collapse;
+  width: 80%;
+}
+th, td {
+  border: 1px solid black;
+  padding: 8px;
+}
+th {
+  background-color: #f2f2f2;
+}
