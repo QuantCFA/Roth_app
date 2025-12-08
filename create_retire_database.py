@@ -2,9 +2,14 @@ from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, DateT
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool  # NEW: Added this import
 import datetime
+import os
+from dotenv import load_dotenv
 
-# UPDATED: Only change is adding connection pooling parameters
-DB_URL = "postgresql://postgres:Roth@localhost:5432/retire_db"
+# Load environment variables
+load_dotenv()
+
+# Use DATABASE_URL environment variable (Render sets this), fall back to local for development
+DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Roth@localhost:5432/retire_db")
 engine = create_engine(
     DB_URL,
     poolclass=QueuePool,      # NEW: Add connection pooling

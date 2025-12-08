@@ -46,10 +46,8 @@ app.add_middleware(
 async def startup_event():
     init_db()
 
-# Use DATABASE_URL environment variable (Render sets this), fall back to local for development
-database_url = os.getenv("DATABASE_URL", "postgresql://postgres:Roth@localhost:5432/retire_db")
-engine = create_engine(database_url)
-SessionLocal = sessionmaker(bind=engine)
+# Database engine is already created in create_retire_database.py
+# It uses DATABASE_URL environment variable if available
 
 class UserCreate(BaseModel):
     username: str
