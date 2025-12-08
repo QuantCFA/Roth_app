@@ -34,4 +34,3 @@ typing_extensions==4.13.2
 urllib3==2.4.0
 uvicorn==0.35.0
 websocket-client==1.8.0
-wsprotocol==1.2.0
