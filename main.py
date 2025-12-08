@@ -5,7 +5,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from create_retire_database import User, CalculationRun, Input, RothConversions, RothConversionsParts, StandardDeductions, TaxBrackets, RetireYrData, UserRatings
+from create_retire_database import User, CalculationRun, Input, RothConversions, RothConversionsParts, StandardDeductions, TaxBrackets, RetireYrData, UserRatings, init_db
 from calc_roth_conv_data import calc_retire_and_conversions
 from decimal import Decimal
 import bcrypt
@@ -40,6 +40,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
 # Use DATABASE_URL environment variable (Render sets this), fall back to local for development
 database_url = os.getenv("DATABASE_URL", "postgresql://postgres:Roth@localhost:5432/retire_db")

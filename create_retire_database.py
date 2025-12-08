@@ -200,12 +200,14 @@ class UserRatings(Base):
 # ALL EXISTING TABLE CREATION CODE REMAINS THE SAME
 from sqlalchemy import inspect
 
-inspector = inspect(engine)
-if not inspector.has_table("users"):
-    Base.metadata.create_all(engine)
-    print("Database schema created successfully")
+def init_db():
+    """Initialize database tables if they don't exist"""
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("users"):
+            Base.metadata.create_all(engine)
+            print("Database schema created successfully")
+    except Exception as e:
+        print(f"Database initialization warning: {e}")
 
-# Test session (optional, can be removed if not needed)
-Session = sessionmaker(bind=engine)
-session = Session()
-session.close()
+SessionLocal = sessionmaker(bind=engine)
