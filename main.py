@@ -644,7 +644,7 @@ def create_checkout_session(request: CheckoutSessionRequest):
     finally:
         session.close()
 
-@app.post("/stripe/webhook")
+@app.post("/stripe-webhook")
 async def stripe_webhook(request: Request):
     """Webhook endpoint to receive payment confirmations from Stripe"""
     payload = await request.body()
@@ -710,6 +710,8 @@ async def stripe_webhook(request: Request):
 
 # Serve React static files (added for production)
 # This mounts the React build folder to serve the app
+# Note: All API routes (like /stripe-webhook) must be defined BEFORE this mount
+# since this mount catches all remaining requests
 frontend_dir = Path(__file__).parent / "frontend" / "build"
 if frontend_dir.exists():
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="static")
