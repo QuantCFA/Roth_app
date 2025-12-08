@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+// In production (Render), use relative URLs since frontend and backend are same origin
+// In development, use localhost:8000
+const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000';
 
 // Create axios instance with base configuration
 const api = axios.create({
