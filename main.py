@@ -5,7 +5,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from create_retire_database import User, CalculationRun, Input, RothConversions, RothConversionsParts, StandardDeductions, TaxBrackets, RetireYrData, UserRatings, init_db
+from create_retire_database import User, CalculationRun, Input, RothConversions, RothConversionsParts, StandardDeductions, TaxBrackets, RetireYrData, UserRatings, init_db, SessionLocal
 from calc_roth_conv_data import calc_retire_and_conversions
 from decimal import Decimal
 import bcrypt
