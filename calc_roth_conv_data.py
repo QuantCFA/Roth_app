@@ -511,7 +511,10 @@ def calc_retire_and_conversions(user_id):
                         diffs = [c - g0 for c, g0 in zip(current_dists, group_0_dists)]
                         cash_flows = [float(conv_tax * -1)] + [float(d) for d in diffs]
                         irr_value = npf.irr(cash_flows)
-                        conv_irr = Decimal(str(min(round(irr_value, 8), 0.99999999))) if irr_value is not None else Decimal('0')
+                        if irr_value is not None and not math.isnan(irr_value) and not math.isinf(irr_value):
+                            conv_irr = Decimal(str(min(round(irr_value, 8), 0.99999999)))
+                        else:
+                            conv_irr = Decimal('0')
                     else:
                         conv_irr = Decimal('0')
                     

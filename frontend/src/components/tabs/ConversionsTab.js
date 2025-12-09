@@ -124,7 +124,11 @@ const ConversionsTab = ({
     setErrorMessage(null);
 
     // Validate required fields
-    if (!inputForm.trad_savings || !inputForm.roth_savings) return;
+    if (inputForm.trad_savings === '' || parseFloat(inputForm.trad_savings) <= 0) {
+      setErrorMessage('Traditional Savings must be greater than 0');
+      return;
+    }
+    if (inputForm.roth_savings === '') return;
     if (!inputForm.soc_sec_benefit && inputForm.soc_sec_benefit !== 0) {
       setErrorMessage('Soc Sec Benefit is required');
       return;
@@ -616,7 +620,7 @@ const ConversionsTab = ({
             name="roth_savings"
             value={inputForm.roth_savings}
             onValueChange={(values) => {
-              updateInputField('roth_savings', values.floatValue || '');
+              updateInputField('roth_savings', values.floatValue !== undefined ? values.floatValue : '');
             }}
             thousandSeparator=","
             prefix="$"
