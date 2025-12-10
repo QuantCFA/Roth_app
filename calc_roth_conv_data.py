@@ -298,32 +298,33 @@ def calc_retire_and_conversions(user_id):
             'description': 'Standard deduction'
         })
         
-        # Groups 2+: Tax bracket conversions
+        # Groups 2+: Tax bracket conversions (only if trad_savings >= std_ded)
         trad_savings = user.trad_savings
         roth_savings = user.roth_savings
         conv_group = 2
         breaking_bracket = None
-        
-        for bracket in tax_brackets[:-1]:
-            if bracket.income_max is not None and trad_savings > (std_deduction.std_ded + bracket.income_max):
-                conversion_groups.append({
-                    'conv_group_num': conv_group,
-                    'trad_savings': initial_trad_savings - (std_deduction.std_ded + bracket.income_max),
-                    'roth_savings': initial_roth_savings + (std_deduction.std_ded + bracket.income_max),
-                    'description': f'Fill {bracket.tax_rate:.1%} bracket'
-                })
-                conv_group += 1
-            else:
-                breaking_bracket = bracket
-                break
-        
-        # Final group: Full conversion
-        conversion_groups.append({
-            'conv_group_num': conv_group,
-            'trad_savings': Decimal('0'),
-            'roth_savings': initial_roth_savings + initial_trad_savings,
-            'description': 'Full conversion'
-        })
+
+        if trad_savings > std_deduction.std_ded:
+            for bracket in tax_brackets[:-1]:
+                if bracket.income_max is not None and trad_savings > (std_deduction.std_ded + bracket.income_max):
+                    conversion_groups.append({
+                        'conv_group_num': conv_group,
+                        'trad_savings': initial_trad_savings - (std_deduction.std_ded + bracket.income_max),
+                        'roth_savings': initial_roth_savings + (std_deduction.std_ded + bracket.income_max),
+                        'description': f'Fill {bracket.tax_rate:.1%} bracket'
+                    })
+                    conv_group += 1
+                else:
+                    breaking_bracket = bracket
+                    break
+
+            # Final group: Full conversion
+            conversion_groups.append({
+                'conv_group_num': conv_group,
+                'trad_savings': Decimal('0'),
+                'roth_savings': initial_roth_savings + initial_trad_savings,
+                'description': 'Full conversion'
+            })
         
         # Process each conversion group
         for group_info in conversion_groups:
@@ -461,7 +462,7 @@ def calc_retire_and_conversions(user_id):
                 # Calculate conversion amounts and taxes
                 if conv_group_num == 1:
                     # Standard deduction conversion
-                    conv_amt = std_deduction.std_ded
+                    conv_amt = min(user.trad_savings, std_deduction.std_ded)
                     conv_tax = Decimal('0')
                     tax_rate_bucket = Decimal('0.000')
                     
