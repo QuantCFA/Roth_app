@@ -339,6 +339,8 @@ def login(login_data: LoginRequest):
         if not user or not bcrypt.checkpw(login_data.password.encode('utf-8'), user.password_hash.encode('utf-8')):
             raise HTTPException(status_code=400, detail="Invalid username or password")
         return {"user_id": user.user_id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
     finally:
