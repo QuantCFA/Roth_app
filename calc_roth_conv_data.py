@@ -211,7 +211,11 @@ def calc_retire_and_conversions(user_id):
         run_year = run_date.year
         retirement_age = 62
         
-        current_age = run_year - user.birth_date.year - (1 if (run_date.month, run_date.day) < (user.birth_date.month, user.birth_date.day) else 0)
+        #current_age = run_year - user.birth_date.year - (1 if (run_date.month, run_date.day) < (user.birth_date.month, user.birth_date.day) else 0)
+        current_age = run_year - user.birth_date.year
+        user_actual_age = current_age
+        if current_age < retirement_age:
+            user_actual_age = current_age + (retirement_age - current_age)
         start_year = run_year + (retirement_age - current_age)
         if start_year <= run_year:
             start_year = run_year + 1
@@ -337,7 +341,7 @@ def calc_retire_and_conversions(user_id):
             group_dists = []
             
             current_year = date(start_year, 12, 31)
-            current_age = retirement_age
+            current_age = user_actual_age
             current_ss_benefit = initial_ss_benefit
             current_trad_savings = group_trad_savings * (Decimal('1') + dist_return_assum) - trad_dist
             roth_savings_opt = group_roth_savings * (Decimal('1') + dist_return_assum) - roth_dist_opt
@@ -346,7 +350,7 @@ def calc_retire_and_conversions(user_id):
             for year_offset in range(life_years):
                 if year_offset > 0:
                     current_year = date(start_year + year_offset, 12, 31)
-                    current_age = retirement_age + year_offset
+                    current_age = user_actual_age + year_offset
                     current_ss_benefit = initial_ss_benefit * (Decimal('1') + ss_growth_rate) ** year_offset
                     current_trad_savings = group_trad_savings * (Decimal('1') + dist_return_assum) ** (year_offset + 1) - trad_dist * sum([(Decimal('1') + dist_return_assum) ** i for i in range(year_offset + 1)])
                     roth_savings_opt = group_roth_savings * (Decimal('1') + dist_return_assum) ** (year_offset + 1) - roth_dist_opt * sum([(Decimal('1') + dist_return_assum) ** i for i in range(year_offset + 1)])
