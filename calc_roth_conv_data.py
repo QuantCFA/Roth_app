@@ -219,6 +219,7 @@ def calc_retire_and_conversions(user_id):
         start_year = run_year + (retirement_age - current_age)
         if start_year <= run_year:
             start_year = run_year + 1
+            user_actual_age += 1  # added 12/12/2025
         
         initial_ss_benefit = input_record.soc_sec_benefit or Decimal('24000.00')
         dist_return_assum = input_record.dist_return_assum or Decimal('0.05')
@@ -257,13 +258,24 @@ def calc_retire_and_conversions(user_id):
         logger.info(f"Initial trad_savings=${user.trad_savings:,.2f}, roth_savings=${user.roth_savings:,.2f}")
         
         # Adjust savings to end of run year if needed
-        years_to_run_year_end = run_year - user.birth_date.year - current_age
-        if years_to_run_year_end > 0:
-            initial_trad_savings = user.trad_savings * (Decimal('1') + dist_return_assum) ** years_to_run_year_end
-            initial_roth_savings = user.roth_savings * (Decimal('1') + dist_return_assum) ** years_to_run_year_end
+        years_to_start_year = start_year - run_year -1
+        if years_to_start_year > 0:
+            initial_trad_savings = user.trad_savings * (Decimal('1') + dist_return_assum) ** years_to_start_year
+            initial_roth_savings = user.roth_savings * (Decimal('1') + dist_return_assum) ** years_to_start_year
+            std_ded_adjusted = std_deduction.std_ded * (Decimal('1') + inflation_assum) ** years_to_start_year # added 12/12/2025
+            tax_brackets_adjusted = []                                 # added 12/12/2025
+            for bracket in tax_brackets:                               # added 12/12/2025
+                adjusted_bracket_max = bracket.income_max * (Decimal('1') + inflation_assum) ** years_to_start_year if bracket.income_max else None  # added 12/12/2025
+                # Create a copy of the bracket with adjusted max
+                tax_brackets_adjusted.append(type('obj', (object,), {  # added 12/12/2025
+                    'tax_rate': bracket.tax_rate,                      # added 12/12/2025
+                    'income_max': adjusted_bracket_max                 # added 12/12/2025
+                    })())                                              # added 12/12/2025
         else:
             initial_trad_savings = user.trad_savings
             initial_roth_savings = user.roth_savings
+            std_ded_adjusted = std_deduction.std_ded                   # added 12/12/2025
+            tax_brackets_adjusted = tax_brackets                       # added 12/12/2025
         
         # Storage for all records and conversion data
         all_retire_records = []
@@ -292,37 +304,45 @@ def calc_retire_and_conversions(user_id):
         # Group 1: Standard deduction
         conversion_groups.append({
             'conv_group_num': 1,
-            'trad_savings': initial_trad_savings - std_deduction.std_ded,
-            'roth_savings': initial_roth_savings + std_deduction.std_ded,
+            'trad_savings': initial_trad_savings - std_ded_adjusted,  # added 12/12/2025
+            'roth_savings': initial_roth_savings + std_ded_adjusted,  # added 12/12/2025
+            #'trad_savings': initial_trad_savings - std_deduction.std_ded,
+            #'roth_savings': initial_roth_savings + std_deduction.std_ded,
             'description': 'Standard deduction'
         })
         
-        # Groups 2+: Tax bracket conversions
-        trad_savings = user.trad_savings
-        roth_savings = user.roth_savings
+        # Groups 2+: Tax bracket conversions (only if trad_savings >= std_ded)
+        trad_savings = user.trad_savings  # Probably can delete 12/12/2025
+        roth_savings = user.roth_savings  # Probably can delete 12/12/2025
         conv_group = 2
         breaking_bracket = None
         
-        for bracket in tax_brackets[:-1]:
-            if bracket.income_max is not None and trad_savings > (std_deduction.std_ded + bracket.income_max):
-                conversion_groups.append({
-                    'conv_group_num': conv_group,
-                    'trad_savings': initial_trad_savings - (std_deduction.std_ded + bracket.income_max),
-                    'roth_savings': initial_roth_savings + (std_deduction.std_ded + bracket.income_max),
-                    'description': f'Fill {bracket.tax_rate:.1%} bracket'
-                })
-                conv_group += 1
-            else:
-                breaking_bracket = bracket
-                break
+        if initial_trad_savings > std_ded_adjusted:  # modified 12/12/2025
+            #for bracket in tax_brackets[:-1]:
+            #    if bracket.income_max is not None and trad_savings > (std_deduction.std_ded + bracket.income_max):
+            for bracket_adjusted in tax_brackets_adjusted[:-1]:
+                if bracket_adjusted.income_max is not None and initial_trad_savings > (std_ded_adjusted + bracket_adjusted.income_max):
+                    conversion_groups.append({
+                        'conv_group_num': conv_group,
+                        #'trad_savings': initial_trad_savings - (std_deduction.std_ded + bracket.income_max),
+                        #'roth_savings': initial_roth_savings + (std_deduction.std_ded + bracket.income_max),
+                        #'description': f'Fill {bracket.tax_rate:.1%} bracket'
+                        'trad_savings': initial_trad_savings - (std_ded_adjusted + bracket_adjusted.income_max),
+                        'roth_savings': initial_roth_savings + (std_ded_adjusted + bracket_adjusted.income_max),
+                        'description': f'Fill {bracket_adjusted.tax_rate:.1%} bracket'
+                    })
+                    conv_group += 1
+                else:
+                    breaking_bracket = bracket_adjusted
+                    break
         
-        # Final group: Full conversion
-        conversion_groups.append({
-            'conv_group_num': conv_group,
-            'trad_savings': Decimal('0'),
-            'roth_savings': initial_roth_savings + initial_trad_savings,
-            'description': 'Full conversion'
-        })
+            # Final group: Full conversion
+            conversion_groups.append({
+                'conv_group_num': conv_group,
+                'trad_savings': Decimal('0'),
+                'roth_savings': initial_roth_savings + initial_trad_savings,
+                'description': 'Full conversion'
+            })
         
         # Process each conversion group
         for group_info in conversion_groups:
@@ -460,7 +480,8 @@ def calc_retire_and_conversions(user_id):
                 # Calculate conversion amounts and taxes
                 if conv_group_num == 1:
                     # Standard deduction conversion
-                    conv_amt = std_deduction.std_ded
+                    #conv_amt = std_deduction.std_ded
+                    conv_amt = min(user.trad_savings,std_deduction.std_ded) # 12/13/2025 - used intial_trad_savings and std_ded_adjusted - incorrectly on 12/12/2025
                     conv_tax = Decimal('0')
                     tax_rate_bucket = Decimal('0.000')
                     
@@ -716,7 +737,7 @@ def calc_retire_and_conversions(user_id):
                 f"{rec.pct_ss_taxed_opt:9.3%} "
                 f"{rec.taxable_income_opt:12,.2f} "
                 f"{rec.fed_tax_opt:12,.2f}"
-                f"{rec.after_tax_dist_opt:12,.0f} "
+                f"{rec.after_tax_dist_opt:12,.2f} "
                 f"{rec.trad_mtr_opt:10.3%} "
                 f"{rec.trad_mtr_adj_opt:10.3%}"
             )
